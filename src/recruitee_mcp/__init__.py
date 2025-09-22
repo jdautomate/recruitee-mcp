@@ -9,6 +9,7 @@ __all__ = [
     "JSONRPCError",
     "RecruiteeMCPServer",
     "RecruiteeClient",
+    "SearchFilters"
     "RecruiteeConfig",
     "serve_http",
     "create_http_server",
