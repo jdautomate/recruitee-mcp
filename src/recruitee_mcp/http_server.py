@@ -173,6 +173,8 @@ app = Starlette(
         # ChatGPT connectors should work against this path.
         Mount("/mcp", app=mcp.streamable_http_app()),
         # Optional: legacy SSE transport for max compatibility
+        Mount("/openai-mcp", app=mcp.streamable_http_app()),
+        Mount("/", app=mcp.streamable_http_app()),
         Mount("/sse", app=mcp.sse_app()),
     ]
 )
