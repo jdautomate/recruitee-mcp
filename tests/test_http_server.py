@@ -4,7 +4,7 @@ from urllib import request
 
 import pytest
 
-from recruitee_mcp.http_server import create_http_server
+from recruitee_mcp.http_server import HEALTH_CHECK_PATH, create_http_server
 from recruitee_mcp.server import RecruiteeMCPServer
 
 
@@ -56,3 +56,15 @@ def test_http_server_parse_error(http_server):
     response = _post_json(http_server, b"not-json")
     assert response["error"]["code"] == -32700
     assert response["id"] is None
+
+
+def test_http_server_health_check(http_server):
+    host, port = http_server.server_address[:2]
+    url = f"http://{host}:{port}{HEALTH_CHECK_PATH}"
+    with request.urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        assert response.headers.get("Content-Type") == "application/json"
+        body = response.read().decode("utf-8")
+
+    payload = json.loads(body)
+    assert payload == {"status": "ok"}
