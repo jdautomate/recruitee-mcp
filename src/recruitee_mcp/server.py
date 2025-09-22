@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, Callable, Dict, Iterable, Mapping
+import sys
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Mapping
 
+from .client import (
+    RecruiteeAPIError,
+    RecruiteeClient,
+    RecruiteeConnectionError,
+    RecruiteeError,
+)
 
 LOGGER = logging.getLogger(__name__)
+
+JsonDict = Dict[str, Any]
 
 
 class JSONRPCError(Exception):
@@ -25,93 +36,6 @@ class JSONRPCError(Exception):
         return {"jsonrpc": "2.0", "error": error, "id": request_id}
 
 
-class RecruiteeMCPServer:
-    """Minimal JSON-RPC server used for dispatching MCP commands."""
-
-    def __init__(self) -> None:
-        self._methods: Dict[str, Callable[..., Any]] = {}
-        # Register built-in methods.
-        self.register_method("ping", self.ping)
-
-    def register_method(self, name: str, func: Callable[..., Any]) -> None:
-        """Register a callable for a JSON-RPC method name."""
-
-        if not name:
-            raise ValueError("Method name must be a non-empty string.")
-        self._methods[name] = func
-        LOGGER.debug("Registered JSON-RPC method %s", name)
-
-    def ping(self) -> str:
-        """Simple health-check endpoint."""
-
-        return "pong"
-
-    def handle_json_rpc(self, request: Mapping[str, Any]) -> Dict[str, Any]:
-        """Dispatch a JSON-RPC request and return a response payload."""
-
-        if not isinstance(request, Mapping):
-            raise JSONRPCError(-32600, "Invalid Request", data="Request must be an object")
-
-        if request.get("jsonrpc") != "2.0":
-            raise JSONRPCError(-32600, "Invalid Request", data="jsonrpc must be '2.0'")
-
-        if "id" not in request:
-            raise JSONRPCError(-32600, "Invalid Request", data="Missing id")
-
-        method_name = request.get("method")
-        if not isinstance(method_name, str) or not method_name:
-            raise JSONRPCError(-32600, "Invalid Request", data="Method must be a non-empty string")
-
-        method = self._methods.get(method_name)
-        if method is None:
-            raise JSONRPCError(-32601, "Method not found")
-
-        params = request.get("params", [])
-        try:
-            result = self._invoke_method(method, params)
-        except JSONRPCError:
-            raise
-        except Exception as exc:  # pragma: no cover - defensive logging
-            LOGGER.exception("Unhandled exception calling method %s", method_name)
-            raise JSONRPCError(-32603, "Internal error", data=str(exc)) from exc
-
-        return {"jsonrpc": "2.0", "result": result, "id": request["id"]}
-
-    def _invoke_method(self, method: Callable[..., Any], params: Any) -> Any:
-        """Call the provided method with validated parameters."""
-
-        if params is None:
-            return method()
-
-        if isinstance(params, Iterable) and not isinstance(params, (str, bytes, Mapping)):
-            return method(*params)
-
-        if isinstance(params, Mapping):
-            return method(**params)
-
-        raise JSONRPCError(-32602, "Invalid params")
-
-
-__all__ = ["JSONRPCError", "RecruiteeMCPServer"]
-"""Minimal JSON-RPC server that exposes Recruitee data via MCP primitives."""
-
-from __future__ import annotations
-
-import json
-import sys
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, Mapping
-
-from .client import (
-    RecruiteeAPIError,
-    RecruiteeClient,
-    RecruiteeConnectionError,
-    RecruiteeError,
-)
-
-JsonDict = Dict[str, Any]
-
-
 @dataclass(slots=True)
 class _Tool:
     name: str
@@ -123,8 +47,8 @@ class _Tool:
 class RecruiteeMCPServer:
     """Serve a limited subset of the Model Context Protocol for Recruitee."""
 
-    def __init__(self, client: RecruiteeClient):
-        self._client = client
+    def __init__(self, client: RecruiteeClient | None = None):
+        self._client: RecruiteeClient | None = client
         self._tools: Dict[str, _Tool] = {
             "search_offers": _Tool(
                 name="search_offers",
@@ -223,6 +147,42 @@ class RecruiteeMCPServer:
     # ------------------------------------------------------------------
     # JSON-RPC entry points
     # ------------------------------------------------------------------
+    def handle_json_rpc(self, request: Mapping[str, Any]) -> JsonDict:
+        """Validate and dispatch a JSON-RPC request."""
+
+        if not isinstance(request, Mapping):
+            raise JSONRPCError(-32600, "Invalid Request", data="Request must be an object")
+
+        if request.get("jsonrpc") != "2.0":
+            raise JSONRPCError(-32600, "Invalid Request", data="jsonrpc must be '2.0'")
+
+        if "id" not in request:
+            raise JSONRPCError(-32600, "Invalid Request", data="Missing id")
+
+        if request.get("id") is None:
+            raise JSONRPCError(-32600, "Invalid Request", data="id must not be null")
+
+        method_name = request.get("method")
+        if not isinstance(method_name, str) or not method_name:
+            raise JSONRPCError(
+                -32600,
+                "Invalid Request",
+                data="Method must be a non-empty string",
+            )
+
+        raw_params = request.get("params")
+        if raw_params is None:
+            params: Mapping[str, Any] = {}
+        elif isinstance(raw_params, Mapping):
+            params = raw_params
+        else:
+            raise JSONRPCError(-32602, "Invalid params", data="Params must be an object")
+
+        normalized_request: Dict[str, Any] = dict(request)
+        normalized_request["params"] = params
+
+        return self._dispatch(normalized_request)
+
     def run(self, *, input_stream=None, output_stream=None) -> None:
         input_stream = input_stream or sys.stdin
         output_stream = output_stream or sys.stdout
@@ -233,21 +193,31 @@ class RecruiteeMCPServer:
             try:
                 request = json.loads(payload)
             except json.JSONDecodeError:
-                self._write_error(output_stream, None, -32700, "Invalid JSON")
+                response = JSONRPCError(-32700, "Parse error").to_response(None)
+                self._write_json(output_stream, response)
                 continue
 
-            response = self._dispatch(request)
+            try:
+                response = self.handle_json_rpc(request)
+            except JSONRPCError as exc:
+                request_id = request.get("id") if isinstance(request, Mapping) else None
+                response = exc.to_response(request_id)
+            except Exception as exc:  # pragma: no cover - defensive safeguard
+                LOGGER.exception("Unhandled exception while processing JSON-RPC request")
+                request_id = request.get("id") if isinstance(request, Mapping) else None
+                response = JSONRPCError(-32603, "Internal error", data=str(exc)).to_response(
+                    request_id
+                )
+
             if response is None:
                 continue
 
-            output_stream.write(json.dumps(response))
-            output_stream.write("\n")
-            output_stream.flush()
+            self._write_json(output_stream, response)
 
     # ------------------------------------------------------------------
     # Protocol handlers
     # ------------------------------------------------------------------
-    def _dispatch(self, request: Mapping[str, Any]) -> Optional[JsonDict]:
+    def _dispatch(self, request: Mapping[str, Any]) -> JsonDict:
         method = request.get("method")
         request_id = request.get("id")
         params = request.get("params") or {}
@@ -256,7 +226,7 @@ class RecruiteeMCPServer:
             if method == "initialize":
                 return self._response(request_id, self._handle_initialize())
             if method == "ping":
-                return self._response(request_id, {"ok": True})
+                return self._response(request_id, "pong")
             if method == "list_resources":
                 return self._response(request_id, self._handle_list_resources(params))
             if method == "read_resource":
@@ -313,10 +283,11 @@ class RecruiteeMCPServer:
 
     def _handle_read_resource(self, params: Mapping[str, Any]) -> JsonDict:
         uri = params.get("uri")
+        client = self._require_client()
         if uri == "recruitee://offers":
-            data = self._client.list_offers(include_description=True)
+            data = client.list_offers(include_description=True)
         elif uri == "recruitee://pipelines":
-            data = self._client.list_pipelines()
+            data = client.list_pipelines()
         else:
             raise RecruiteeError(f"Unsupported resource URI: {uri}")
 
@@ -348,7 +319,8 @@ class RecruiteeMCPServer:
     # Tool handlers
     # ------------------------------------------------------------------
     def _tool_search_offers(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
-        return self._client.list_offers(
+        client = self._require_client()
+        return client.list_offers(
             state=arguments.get("state"),
             limit=arguments.get("limit"),
             include_description=bool(arguments.get("include_description")),
@@ -358,13 +330,14 @@ class RecruiteeMCPServer:
         offer_id = arguments.get("offer_id")
         if offer_id is None:
             raise RecruiteeError("'offer_id' is required")
-        return self._client.get_offer(offer_id)
+        return self._require_client().get_offer(offer_id)
 
     def _tool_search_candidates(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
         query = arguments.get("query")
         if not query:
             raise RecruiteeError("'query' is required")
-        return self._client.search_candidates(
+        client = self._require_client()
+        return client.search_candidates(
             query=query,
             page=arguments.get("page"),
             limit=arguments.get("limit"),
@@ -374,14 +347,15 @@ class RecruiteeMCPServer:
         candidate_id = arguments.get("candidate_id")
         if candidate_id is None:
             raise RecruiteeError("'candidate_id' is required")
-        return self._client.get_candidate(candidate_id)
+        return self._require_client().get_candidate(candidate_id)
 
     def _tool_create_candidate(self, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
         required = ["first_name", "last_name", "email"]
         missing = [field for field in required if not arguments.get(field)]
         if missing:
             raise RecruiteeError(f"Missing required fields: {', '.join(missing)}")
-        return self._client.create_candidate(
+        client = self._require_client()
+        return client.create_candidate(
             first_name=arguments["first_name"],
             last_name=arguments["last_name"],
             email=arguments["email"],
@@ -403,9 +377,7 @@ class RecruiteeMCPServer:
         }
 
     @staticmethod
-    def _response(request_id: Any, result: Mapping[str, Any]) -> JsonDict | None:
-        if request_id is None:
-            return None
+    def _response(request_id: Any, result: Any) -> JsonDict:
         return {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -413,9 +385,7 @@ class RecruiteeMCPServer:
         }
 
     @staticmethod
-    def _error(request_id: Any, code: int, message: str) -> JsonDict | None:
-        if request_id is None:
-            return None
+    def _error(request_id: Any, code: int, message: str) -> JsonDict:
         return {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -426,10 +396,15 @@ class RecruiteeMCPServer:
         }
 
     @staticmethod
-    def _write_error(output_stream, request_id: Any, code: int, message: str) -> None:
-        response = RecruiteeMCPServer._error(request_id, code, message)
-        if not response:
-            return
-        output_stream.write(json.dumps(response))
+    def _write_json(output_stream, payload: Mapping[str, Any]) -> None:
+        output_stream.write(json.dumps(payload))
         output_stream.write("\n")
         output_stream.flush()
+
+    def _require_client(self) -> RecruiteeClient:
+        if self._client is None:
+            raise RuntimeError("Recruitee client is not configured")
+        return self._client
+
+
+__all__ = ["JSONRPCError", "RecruiteeMCPServer"]
