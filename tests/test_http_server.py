@@ -4,7 +4,7 @@ from urllib import request
 
 import pytest
 
-from recruitee_mcp.http_server import HEALTH_CHECK_PATH, create_http_server
+from recruitee_mcp.http_server import HEALTH_CHECK_PATH, HANDSHAKE_PATHS, create_http_server
 from recruitee_mcp.server import RecruiteeMCPServer
 
 
@@ -68,3 +68,18 @@ def test_http_server_health_check(http_server):
 
     payload = json.loads(body)
     assert payload == {"status": "ok"}
+
+
+@pytest.mark.parametrize("path", sorted(HANDSHAKE_PATHS))
+def test_http_server_handshake(http_server, path):
+    host, port = http_server.server_address[:2]
+    url = f"http://{host}:{port}{path}"
+    with request.urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        assert response.headers.get("Content-Type") == "application/json"
+        body = response.read().decode("utf-8")
+
+    payload = json.loads(body)
+    assert payload["status"] == "ok"
+    assert payload["name"] == "recruitee-mcp"
+    assert "message" in payload
