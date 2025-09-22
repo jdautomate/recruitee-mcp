@@ -5,22 +5,37 @@ from __future__ import annotations
 import json
 import logging
 import os
+from importlib import metadata
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from typing import Any, Optional, Type
 
 from .server import JSONRPCError, RecruiteeMCPServer
-from starlette.applications import Starlette
-from starlette.routing import Mount
-from starlette.middleware.cors import CORSMiddleware
-from mcp.server.fastmcp import FastMCP
 
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_HTTP_PORT = 8080
 HTTP_PORT_ENV_VAR = "RECRUITEE_HTTP_PORT"
 HEALTH_CHECK_PATH = "/health"
+HANDSHAKE_PATHS = {"/", "/mcp"}
+
+
+def _handshake_payload() -> dict[str, Any]:
+    """Return a descriptive payload for HTTP GET probes."""
+
+    payload: dict[str, Any] = {
+        "status": "ok",
+        "name": "recruitee-mcp",
+        "message": "Send POST requests with JSON-RPC 2.0 payloads to interact with the Recruitee MCP server.",
+    }
+
+    try:
+        payload["version"] = metadata.version("recruitee-mcp")
+    except metadata.PackageNotFoundError:  # pragma: no cover - metadata missing when running from source tree
+        pass
+
+    return payload
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -93,7 +108,12 @@ def _create_handler(mcp_server: RecruiteeMCPServer) -> Type[BaseHTTPRequestHandl
                 self._write_json_response({"status": "ok"})
                 return
 
-            self.send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Only POST is supported")
+            normalized_path = self.path.rstrip("/") or "/"
+            if normalized_path in HANDSHAKE_PATHS:
+                self._write_json_response(_handshake_payload())
+                return
+
+            self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
 
         def _dispatch_request(self, payload: Any) -> dict[str, Any]:
             if not isinstance(payload, dict):
@@ -160,30 +180,42 @@ __all__ = [
     "serve_http",
 ]
 
-mcp = FastMCP("recruitee-mcp")  # keep your existing tools/resources/prompts
 
-# If you prefer the endpoint at exactly /mcp, leave as default.
-# If you want it at the root of a subpath, you can do:
-# mcp.settings.streamable_http_path = "/"
+try:  # pragma: no cover - optional dependencies exercised only when installed
+    from starlette.applications import Starlette
+    from starlette.middleware.cors import CORSMiddleware
+    from starlette.routing import Mount
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # pragma: no cover - optional dependencies may be absent
+    Starlette = None  # type: ignore[assignment]
+    CORSMiddleware = None  # type: ignore[assignment]
+    Mount = None  # type: ignore[assignment]
+    FastMCP = None  # type: ignore[assignment]
+else:
+    mcp = FastMCP("recruitee-mcp")  # keep your existing tools/resources/prompts
 
-# --- Assemble ASGI app with both transports mounted ---
-app = Starlette(
-    routes=[
-        # New spec: single endpoint that supports POST (and GET for streaming)
-        # ChatGPT connectors should work against this path.
-        Mount("/mcp", app=mcp.streamable_http_app()),
-        # Optional: legacy SSE transport for max compatibility
-        Mount("/openai-mcp", app=mcp.streamable_http_app()),
-        Mount("/", app=mcp.streamable_http_app()),
-        Mount("/sse", app=mcp.sse_app()),
-    ]
-)
+    # If you prefer the endpoint at exactly /mcp, leave as default.
+    # If you want it at the root of a subpath, you can do:
+    # mcp.settings.streamable_http_path = "/"
 
-# CORS: expose the session header for web clients, allow Streamable HTTP methods
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],                  # tighten for prod
-    allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["*"],
-    expose_headers=["Mcp-Session-Id"],
-)
+    # --- Assemble ASGI app with both transports mounted ---
+    app = Starlette(
+        routes=[
+            # New spec: single endpoint that supports POST (and GET for streaming)
+            # ChatGPT connectors should work against this path.
+            Mount("/mcp", app=mcp.streamable_http_app()),
+            Mount("/openai-mcp", app=mcp.streamable_http_app()),
+            Mount("/", app=mcp.streamable_http_app()),
+            # Optional: legacy SSE transport for max compatibility
+            Mount("/sse", app=mcp.sse_app()),
+        ]
+    )
+
+    # CORS: expose the session header for web clients, allow Streamable HTTP methods
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # tighten for prod
+        allow_methods=["GET", "POST", "DELETE"],
+        allow_headers=["*"],
+        expose_headers=["Mcp-Session-Id"],
+    )
