@@ -1,18 +1,15 @@
-"""Core package for the Recruitee MCP server."""
+"""Core package for the Recruitee MCP server, exposing the client, configuration, server, and HTTP helpers."""
 
+from .client import RecruiteeClient
+from .config import RecruiteeConfig
+from .http_server import create_http_server, serve_http
 from .server import JSONRPCError, RecruiteeMCPServer
-from .http_server import serve_http, create_http_server
 
 __all__ = [
     "JSONRPCError",
     "RecruiteeMCPServer",
+    "RecruiteeClient",
+    "RecruiteeConfig",
     "serve_http",
     "create_http_server",
 ]
-"""Recruitee MCP server package."""
-
-from .client import RecruiteeClient
-from .config import RecruiteeConfig
-from .server import RecruiteeMCPServer
-
-__all__ = ["RecruiteeClient", "RecruiteeConfig", "RecruiteeMCPServer"]
