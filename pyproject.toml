@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recruitee-mcp"
+version = "0.1.0"
+description = "Recruitee MCP reference implementation"
+authors = [{name = "Recruitee", email = "engineering@recruitee.com"}]
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.scripts]
+recruitee-mcp = "recruitee_mcp.main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
