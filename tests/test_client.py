@@ -35,7 +35,7 @@ def test_list_offers_builds_correct_request() -> None:
     client = RecruiteeClient(company_id="acme", api_token="token-123")
 
     def fake_urlopen(request, timeout):
-        assert request.full_url == "https://api.recruitee.com/c/acme/offers?state=published&limit=5"
+        assert request.full_url == "https://api.recruitee.com/c/acme/offers?scope=published&limit=5"
         assert request.get_method() == "GET"
         assert request.get_header("Authorization") == "Bearer token-123"
         assert timeout == 30.0
