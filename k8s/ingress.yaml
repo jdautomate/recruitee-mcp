@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: recruitee-mcp
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    external-dns.alpha.kubernetes.io/hostname: app.example.com
+    # Adjust host/path handling with controller-specific annotations as needed.
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # Uncomment to configure TLS with cert-manager or your ingress controller
+    # cert-manager.io/cluster-issuer: letsencrypt-production
+spec:
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: recruitee-mcp
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - app.example.com
+      secretName: recruitee-mcp-tls
+      # Provide an existing TLS secret or let cert-manager issue one via the annotation above.
