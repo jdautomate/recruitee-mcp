@@ -16,6 +16,7 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_HTTP_PORT = 8080
 HTTP_PORT_ENV_VAR = "RECRUITEE_HTTP_PORT"
+HEALTH_CHECK_PATH = "/health"
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
@@ -84,6 +85,10 @@ def _create_handler(mcp_server: RecruiteeMCPServer) -> Type[BaseHTTPRequestHandl
             self._write_json_response(response_payload)
 
         def do_GET(self) -> None:  # noqa: N802 - required signature
+            if self.path == HEALTH_CHECK_PATH:
+                self._write_json_response({"status": "ok"})
+                return
+
             self.send_error(HTTPStatus.METHOD_NOT_ALLOWED, "Only POST is supported")
 
         def _dispatch_request(self, payload: Any) -> dict[str, Any]:
@@ -145,6 +150,7 @@ def serve_http(
 __all__ = [
     "DEFAULT_HTTP_PORT",
     "HTTP_PORT_ENV_VAR",
+    "HEALTH_CHECK_PATH",
     "ThreadingHTTPServer",
     "create_http_server",
     "serve_http",
