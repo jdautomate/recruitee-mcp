@@ -1,46 +1,36 @@
-# Recruitee MCP
+# recruitee-mcp
 
-This repository contains a minimal reference implementation of the Recruitee Model Context Protocol (MCP) server.
+## Kubernetes deployment
 
-## Running the server
+The repository contains example manifests under `k8s/` for running the HTTP
+server on Kubernetes.
 
-The server now exposes a JSON-RPC endpoint over HTTP by default. You can start it directly via the installed console
-script:
+1. Deploy the application pods:
+   ```bash
+   kubectl apply -f k8s/deployment.yaml
+   ```
+2. Expose the pods internally through a ClusterIP Service:
+   ```bash
+   kubectl apply -f k8s/service.yaml
+   ```
+3. Publish the Service externally with an Ingress resource:
+   ```bash
+   kubectl apply -f k8s/ingress.yaml
+   ```
 
-```bash
-recruitee-mcp
-```
+Update the container image in `k8s/deployment.yaml` to match the image you wish
+to deploy. The Service exposes port 80 inside the cluster and forwards traffic
+to the container port `8080` declared in the Deployment.
 
-By default the server binds to `0.0.0.0:8080`. The port can be configured through the `RECRUITEE_HTTP_PORT`
-environment variable or via the `--port` CLI argument:
+The default Ingress manifest assumes an ingress controller such as NGINX. Adjust
+the annotations under `metadata.annotations` to match your ingress controller
+(e.g., `kubernetes.io/ingress.class`, `nginx.ingress.kubernetes.io/rewrite-target`).
+Set `external-dns.alpha.kubernetes.io/hostname` (or controller-specific
+equivalents) and the `spec.rules[0].host` value to the hostname that should
+route to this service. To enable TLS termination, provide a TLS secret name in
+the `spec.tls` section and, if using cert-manager, uncomment the
+`cert-manager.io/cluster-issuer` annotation or replace it with the issuer name
+required by your environment.
 
-```bash
-export RECRUITEE_HTTP_PORT=9090
-recruitee-mcp --host 127.0.0.1
-```
-
-To explicitly select the port via CLI instead of the environment variable:
-
-```bash
-recruitee-mcp --port 9090
-```
-
-### Legacy stdio transport
-
-For backwards compatibility a stdio transport is still available. It can be enabled with the `--stdio` flag which causes
-the server to read JSON-RPC payloads from standard input and write responses to standard output:
-
-```bash
-echo '{"jsonrpc": "2.0", "id": 1, "method": "ping"}' | recruitee-mcp --stdio
-```
-
-This mode remains opt-in, while the default behaviour continues to be the HTTP transport described above.
-
-## Development
-
-Install the project in editable mode and run the tests via `pytest`:
-
-```bash
-pip install -e .
-pytest
-```
+Once the manifests are configured, you can apply updates at any time with
+`kubectl apply -f k8s/` to sync all resources in a single command.

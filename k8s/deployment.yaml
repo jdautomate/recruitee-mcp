@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recruitee-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recruitee-mcp
+  template:
+    metadata:
+      labels:
+        app: recruitee-mcp
+    spec:
+      containers:
+        - name: recruitee-mcp
+          image: ghcr.io/your-org/recruitee-mcp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
