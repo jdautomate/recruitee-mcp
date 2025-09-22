@@ -11,6 +11,10 @@ from socketserver import ThreadingMixIn
 from typing import Any, Optional, Type
 
 from .server import JSONRPCError, RecruiteeMCPServer
+from starlette.applications import Starlette
+from starlette.routing import Mount
+from starlette.middleware.cors import CORSMiddleware
+from mcp.server.fastmcp import FastMCP
 
 LOGGER = logging.getLogger(__name__)
 
@@ -155,3 +159,29 @@ __all__ = [
     "create_http_server",
     "serve_http",
 ]
+
+mcp = FastMCP("recruitee-mcp")  # keep your existing tools/resources/prompts
+
+# If you prefer the endpoint at exactly /mcp, leave as default.
+# If you want it at the root of a subpath, you can do:
+# mcp.settings.streamable_http_path = "/"
+
+# --- Assemble ASGI app with both transports mounted ---
+app = Starlette(
+    routes=[
+        # New spec: single endpoint that supports POST (and GET for streaming)
+        # ChatGPT connectors should work against this path.
+        Mount("/mcp", app=mcp.streamable_http_app()),
+        # Optional: legacy SSE transport for max compatibility
+        Mount("/sse", app=mcp.sse_app()),
+    ]
+)
+
+# CORS: expose the session header for web clients, allow Streamable HTTP methods
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],                  # tighten for prod
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id"],
+)
