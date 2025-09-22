@@ -1,5 +1,4 @@
 """Entry point for launching the Recruitee MCP server."""
-"""Entry point for running the Recruitee MCP server."""
 
 from __future__ import annotations
 
@@ -8,8 +7,10 @@ import json
 import logging
 import os
 import sys
-from typing import Iterable, Mapping, TextIO
+from typing import Any, Iterable, Mapping, TextIO
 
+from .client import RecruiteeClient
+from .config import RecruiteeConfig
 from .http_server import serve_http
 from .server import JSONRPCError, RecruiteeMCPServer
 
@@ -22,17 +23,17 @@ def _configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=level, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 
-def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
+def _create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the Recruitee MCP server")
     parser.add_argument(
         "--stdio",
         action="store_true",
-        help="Run the server in legacy stdio mode instead of the HTTP transport",
+        help="Run the server using the stdio transport instead of HTTP",
     )
     parser.add_argument(
         "--host",
         default=os.getenv("RECRUITEE_HTTP_HOST", "0.0.0.0"),
-        help="Host interface to bind the HTTP server to (default: 0.0.0.0)",
+        help="Host interface for the HTTP server (defaults to RECRUITEE_HTTP_HOST or 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
@@ -40,12 +41,60 @@ def _parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Port for the HTTP server. Overrides the RECRUITEE_HTTP_PORT environment variable.",
     )
+    parser.add_argument("--company-id", help="Recruitee company identifier", default=None)
+    parser.add_argument("--api-token", help="Recruitee API token", default=None)
+    parser.add_argument(
+        "--base-url",
+        help="Override the Recruitee API base URL (defaults to https://api.recruitee.com)",
+        default=None,
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        help="Request timeout in seconds (defaults to 30)",
+        default=None,
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging output")
-    return parser.parse_args(list(argv) if argv is not None else None)
+    return parser
+
+
+def _build_config_from_args(args: argparse.Namespace) -> RecruiteeConfig:
+    env = dict(os.environ)
+    if args.company_id:
+        env["RECRUITEE_COMPANY_ID"] = args.company_id
+    if args.api_token:
+        env["RECRUITEE_API_TOKEN"] = args.api_token
+    if args.base_url:
+        env["RECRUITEE_BASE_URL"] = args.base_url
+    if args.timeout is not None:
+        env["RECRUITEE_TIMEOUT"] = str(args.timeout)
+    return RecruiteeConfig.from_env(env)
+
+
+class _ServerTransportAdapter:
+    """Adapter that provides ``handle_json_rpc`` for legacy transport helpers."""
+
+    def __init__(self, server: RecruiteeMCPServer) -> None:
+        self._server = server
+
+    def handle_json_rpc(self, payload: Mapping[str, Any]) -> Mapping[str, Any] | None:
+        dispatch = getattr(self._server, "_dispatch", None)
+        if dispatch is None:
+            raise AttributeError("RecruiteeMCPServer does not provide a JSON-RPC dispatch method")
+        return dispatch(payload)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._server, item)
+
+
+def _ensure_transport_server(server: RecruiteeMCPServer) -> Any:
+    if hasattr(server, "handle_json_rpc"):
+        return server
+    return _ServerTransportAdapter(server)
 
 
 def run_stdio(
-    mcp_server: RecruiteeMCPServer,
+    mcp_server: Any,
     *,
     input_stream: TextIO = sys.stdin,
     output_stream: TextIO = sys.stdout,
@@ -71,85 +120,37 @@ def run_stdio(
                 LOGGER.exception("Unhandled exception while processing stdio JSON-RPC request")
                 response_payload = JSONRPCError(-32603, "Internal error", data=str(exc)).to_response(request_id)
 
+        if response_payload is None:
+            continue
+
         output_stream.write(json.dumps(response_payload))
         output_stream.write("\n")
         output_stream.flush()
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    args = _parse_args(argv)
+    parser = _create_parser()
+    args = parser.parse_args(list(argv) if argv is not None else None)
     _configure_logging(args.verbose)
 
-    mcp_server = RecruiteeMCPServer()
+    try:
+        config = _build_config_from_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    client = RecruiteeClient.from_config(config)
+    server = RecruiteeMCPServer(client)
+    transport_server = _ensure_transport_server(server)
 
     if args.stdio:
         LOGGER.info("Starting Recruitee MCP server in stdio mode")
-        run_stdio(mcp_server)
+        run_stdio(transport_server)
         return 0
 
     LOGGER.info("Starting Recruitee MCP server in HTTP mode")
-    serve_http(mcp_server, host=args.host, port=args.port)
+    serve_http(transport_server, host=args.host, port=args.port)
     return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - module execution guard
     sys.exit(main())
-import os
-import sys
-from typing import Dict
-
-from .client import RecruiteeClient, RecruiteeError
-from .config import RecruiteeConfig
-from .server import RecruiteeMCPServer
-
-
-def _build_config_from_args(args: argparse.Namespace) -> RecruiteeConfig:
-    env: Dict[str, str] = dict(os.environ)
-    if args.company_id:
-        env["RECRUITEE_COMPANY_ID"] = args.company_id
-    if args.api_token:
-        env["RECRUITEE_API_TOKEN"] = args.api_token
-    if args.base_url:
-        env["RECRUITEE_BASE_URL"] = args.base_url
-    if args.timeout:
-        env["RECRUITEE_TIMEOUT"] = str(args.timeout)
-    return RecruiteeConfig.from_env(env)
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the Recruitee MCP server.")
-    parser.add_argument("--company-id", help="Recruitee company identifier")
-    parser.add_argument("--api-token", help="Recruitee API token")
-    parser.add_argument(
-        "--base-url",
-        help="Override the Recruitee API base URL (defaults to https://api.recruitee.com)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        help="Request timeout in seconds (defaults to 30)",
-    )
-    parsed = parser.parse_args(argv)
-
-    try:
-        config = _build_config_from_args(parsed)
-    except ValueError as exc:
-        parser.error(str(exc))
-        return 2
-
-    client = RecruiteeClient.from_config(config)
-    server = RecruiteeMCPServer(client)
-
-    try:
-        server.run()
-    except RecruiteeError as exc:
-        print(f"Server terminated due to Recruitee error: {exc}", file=sys.stderr)
-        return 1
-    except KeyboardInterrupt:
-        return 0
-
-    return 0
-
-
-if __name__ == "__main__":  # pragma: no cover - manual execution
-    raise SystemExit(main())
