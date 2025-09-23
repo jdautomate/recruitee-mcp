@@ -36,7 +36,9 @@ Once the manifests are configured, you can apply updates at any time with
 `kubectl apply -f k8s/` to sync all resources in a single command.
 # Recruitee MCP
 
-This repository contains a minimal reference implementation of the Recruitee Model Context Protocol (MCP) server.
+This repository contains a minimal reference implementation of the Recruitee Model Context Protocol (MCP) server. It
+announces compliance with MCP protocol version 0.5 so it interoperates with current clients that target the published
+specification.
 
 ## Running the server
 

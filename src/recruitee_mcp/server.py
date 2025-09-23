@@ -15,6 +15,11 @@ from .client import (
     RecruiteeError,
 )
 
+try:  # pragma: no cover - only exercised when optional dependency is present
+    from mcp.server.constants import PROTOCOL_VERSION as MCP_PROTOCOL_VERSION
+except (ImportError, AttributeError):  # pragma: no cover - executed in minimal install
+    MCP_PROTOCOL_VERSION = "0.5"
+
 LOGGER = logging.getLogger(__name__)
 
 JsonDict = Dict[str, Any]
@@ -247,7 +252,7 @@ class RecruiteeMCPServer:
 
     def _handle_initialize(self) -> JsonDict:
         return {
-            "protocolVersion": "0.1",
+            "protocolVersion": MCP_PROTOCOL_VERSION,
             "serverInfo": {
                 "name": "recruitee-mcp",
                 "version": "0.1.0",

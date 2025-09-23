@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from recruitee_mcp.server import RecruiteeMCPServer
+from recruitee_mcp.server import MCP_PROTOCOL_VERSION, RecruiteeMCPServer
 
 
 def build_server() -> tuple[RecruiteeMCPServer, MagicMock]:
@@ -21,6 +21,7 @@ def build_server() -> tuple[RecruiteeMCPServer, MagicMock]:
 def test_initialize_response_contains_capabilities() -> None:
     server, _ = build_server()
     response = server._dispatch({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
+    assert response["result"]["protocolVersion"] == MCP_PROTOCOL_VERSION
     assert response["result"]["serverInfo"]["name"] == "recruitee-mcp"
     assert response["result"]["capabilities"]["tools"]["call"] is True
 
