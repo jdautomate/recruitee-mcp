@@ -55,8 +55,8 @@ class RecruiteeMCPServer:
     def __init__(self, client: RecruiteeClient | None = None):
         self._client: RecruiteeClient | None = client
         self._tools: Dict[str, _Tool] = {
-            "search_offers": _Tool(
-                name="search_offers",
+            "list_offers": _Tool(
+                name="list_offers",
                 description="List job offers for the company.",
                 handler=self._tool_search_offers,
                 schema={

@@ -45,7 +45,7 @@ def _create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-token", help="Recruitee API token", default=None)
     parser.add_argument(
         "--base-url",
-        help="Override the Recruitee API base URL (defaults to https://openvpn.recruitee.com)",
+        help="Override the Recruitee API base URL (defaults to https://api.recruitee.com)",
         default=None,
     )
     parser.add_argument(
