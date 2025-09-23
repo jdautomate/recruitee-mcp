@@ -12,7 +12,7 @@ class RecruiteeConfig:
 
     company_id: str
     api_token: str | None = None
-    base_url: str = "https://openvpn.recruitee.com"
+    base_url: str = "https://api.recruitee.com"
     timeout: float = 30.0
 
     @classmethod

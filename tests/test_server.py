@@ -61,6 +61,34 @@ def test_call_tool_dispatches_to_client() -> None:
     assert response["result"]["content"][0]["data"]["candidate"]["id"] == 1
 
 
+def test_list_tools_includes_list_offers() -> None:
+    server, _ = build_server()
+    response = server._dispatch({"jsonrpc": "2.0", "id": 5, "method": "list_tools"})
+    tool_names = {tool["name"] for tool in response["result"]["tools"]}
+    assert "list_offers" in tool_names
+
+
+def test_call_tool_list_offers_invokes_client() -> None:
+    server, client = build_server()
+    response = server._dispatch(
+        {
+            "jsonrpc": "2.0",
+            "id": 6,
+            "method": "call_tool",
+            "params": {
+                "name": "list_offers",
+                "arguments": {"limit": 5},
+            },
+        }
+    )
+    client.list_offers.assert_called_once_with(
+        state=None,
+        limit=5,
+        include_description=False,
+    )
+    assert response["result"]["content"][0]["data"] == {"offers": []}
+
+
 def test_call_tool_missing_arguments_returns_error() -> None:
     server, _ = build_server()
     response = server._dispatch(
