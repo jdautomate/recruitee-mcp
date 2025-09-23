@@ -17,7 +17,7 @@ from .client import RecruiteeClient  # adjust import if your package layout diff
 
 COMPANY_ID = os.getenv("RECRUITEE_COMPANY_ID")
 API_TOKEN = os.getenv("RECRUITEE_API_TOKEN")
-BASE_URL = os.getenv("RECRUITEE_BASE_URL", "https://api.recruitee.com")
+BASE_URL = os.getenv("RECRUITEE_BASE_URL", "https://openvpn.recruitee.com")
 
 if not COMPANY_ID or not API_TOKEN:
     raise RuntimeError(
