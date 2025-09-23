@@ -71,14 +71,14 @@ class RecruiteeClient:
         limit: int | None = None,
         include_description: bool = False,
         # New / canonical params per API:
-        scope: str | None = None,        # "archived" | "active" | "not_archived"
+        status: str | None = None,        # "archived" | "active" | "not_archived"
         view_mode: str | None = None,    # "brief" | "default"
         offset: int | None = None,
     ) -> Mapping[str, Any]:
         """
         Return a collection of job offers.
 
-        `scope` controls which offers are returned ("archived" | "active" | "not_archived").
+        `status` controls which offers are returned ("archived" | "active" | "not_archived").
         `view_mode="brief"` returns a lean payload; "default" includes most details.
         Use `limit` + `offset` for pagination.
 
@@ -96,8 +96,8 @@ class RecruiteeClient:
             params["include_description"] = "true"
 
         # Canonical params:
-        if scope:
-            params["scope"] = scope
+        if status:
+            params["status"] = status
         if view_mode:
             params["view_mode"] = view_mode
         if offset is not None:
