@@ -72,6 +72,19 @@ echo '{"jsonrpc": "2.0", "id": 1, "method": "ping"}' | recruitee-mcp --stdio
 
 This mode remains opt-in, while the default behaviour continues to be the HTTP transport described above.
 
+### FastMCP tooling
+
+The optional `recruitee_mcp.mcp_server` module relies on the
+[`mcp`](https://github.com/modelcontextprotocol/python-sdk) package. Install the
+extra dependencies to enable the FastMCP tools and streamable HTTP endpoints:
+
+```bash
+pip install "recruitee-mcp[fastmcp]"
+```
+
+If the dependencies are missing, importing the module will raise a descriptive
+error with the same installation hint.
+
 ## Development
 
 Install the project in editable mode and run the tests via `pytest`:

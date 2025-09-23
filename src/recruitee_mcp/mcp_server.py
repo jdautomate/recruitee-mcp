@@ -5,8 +5,13 @@ import os
 import asyncio
 from typing import Any, Dict, Optional, List, Mapping
 
-from mcp.server.fastmcp import FastMCP, Context
-from mcp.server.session import ServerSession
+try:  # pragma: no cover - exercised only when FastMCP extra installed
+    from mcp.server.fastmcp import FastMCP
+except ImportError as exc:  # pragma: no cover - clearer guidance for optional dependency
+    raise ImportError(
+        "FastMCP support requires the optional 'fastmcp' dependencies. "
+        "Install them with `pip install \"recruitee-mcp[fastmcp]\"`."
+    ) from exc
 
 from .client import RecruiteeClient  # adjust import if your package layout differs
 

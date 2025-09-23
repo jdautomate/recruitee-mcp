@@ -22,6 +22,9 @@ dependencies = []
 dev = [
   "pytest"
 ]
+fastmcp = [
+  "mcp[fastmcp]"
+]
 
 [project.scripts]
 recruitee-mcp-server = "recruitee_mcp.main:main"
