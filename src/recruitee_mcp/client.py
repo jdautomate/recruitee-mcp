@@ -86,9 +86,10 @@ class RecruiteeClient:
         """
         params: Dict[str, Any] = {}
 
-        # Back-compat: map your older `state` to the API's `scope`.
-        if state:
-            params["scope"] = state
+        # Canonical scope parameter, supporting both new (`status`) and legacy (`state`) names.
+        scope = status or state
+        if scope:
+            params["scope"] = scope
 
         if limit is not None:
             params["limit"] = limit
@@ -96,8 +97,6 @@ class RecruiteeClient:
             params["include_description"] = "true"
 
         # Canonical params:
-        if status:
-            params["status"] = status
         if view_mode:
             params["view_mode"] = view_mode
         if offset is not None:
