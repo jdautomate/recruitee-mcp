@@ -105,6 +105,34 @@ class RecruiteeClient:
 
         return self._request("GET", "offers", params=params)
 
+    def list_jobs(
+        self,
+        *,
+        state: str | None = None,
+        limit: int | None = None,
+        include_description: bool = False,
+        scope: str | None = None,
+        view_mode: str | None = None,
+        offset: int | None = None,
+    ) -> Mapping[str, Any]:
+        """
+        Alias for :meth:`list_offers` using job-centric terminology.
+
+        The Recruitee API models public listings as "offers", but many callers
+        use "jobs" interchangeably. This helper mirrors
+        :meth:`list_offers` so downstream code can remain semantically
+        consistent while issuing the same request.
+        """
+
+        return self.list_offers(
+            state=state,
+            limit=limit,
+            include_description=include_description,
+            scope=scope,
+            view_mode=view_mode,
+            offset=offset,
+        )
+
     def get_offer(self, offer_id: int | str) -> Mapping[str, Any]:
         """Return the JSON representation for a single offer."""
         return self._request("GET", f"offers/{offer_id}")

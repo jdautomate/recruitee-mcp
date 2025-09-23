@@ -32,7 +32,11 @@ class DummyResponse:
 
 
 def test_list_offers_builds_correct_request() -> None:
-    client = RecruiteeClient(company_id="acme", api_token="token-123")
+    client = RecruiteeClient(
+        company_id="acme",
+        api_token="token-123",
+        base_url="https://api.recruitee.com",
+    )
 
     def fake_urlopen(request, timeout):
         assert request.full_url == "https://api.recruitee.com/c/acme/offers?scope=published&limit=5"
@@ -47,8 +51,41 @@ def test_list_offers_builds_correct_request() -> None:
     assert response == {"offers": []}
 
 
+def test_list_jobs_delegates_to_list_offers() -> None:
+    client = RecruiteeClient(company_id="acme")
+
+    with patch.object(
+        RecruiteeClient,
+        "list_offers",
+        return_value={"offers": ["job"]},
+    ) as mock_list_offers:
+        response = client.list_jobs(
+            state="published",
+            limit=10,
+            include_description=True,
+            scope="active",
+            view_mode="brief",
+            offset=5,
+        )
+
+    assert response == {"offers": ["job"]}
+    mock_list_offers.assert_called_once_with(
+        state="published",
+        limit=10,
+        include_description=True,
+        scope="active",
+        view_mode="brief",
+        offset=5,
+    )
+
+
 def test_create_candidate_serialises_payload() -> None:
-    client = RecruiteeClient(company_id="acme", api_token="secret", timeout=10)
+    client = RecruiteeClient(
+        company_id="acme",
+        api_token="secret",
+        timeout=10,
+        base_url="https://api.recruitee.com",
+    )
 
     def fake_urlopen(request, timeout):
         assert request.full_url == "https://api.recruitee.com/c/acme/candidates"
