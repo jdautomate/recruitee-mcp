@@ -42,7 +42,7 @@ def test_list_offers_builds_correct_request() -> None:
         return DummyResponse({"offers": []})
 
     with patch("recruitee_mcp.client.urlopen", side_effect=fake_urlopen):
-        response = client.list_offers(state="published", limit=5)
+        response = client.list_offers(status="published", limit=5)
 
     assert response == {"offers": []}
 
