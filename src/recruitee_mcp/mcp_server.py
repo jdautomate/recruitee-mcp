@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, List, Mapping
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 
-from client import RecruiteeClient  # adjust import if your package layout differs
+from .client import RecruiteeClient  # adjust import if your package layout differs
 
 COMPANY_ID = os.getenv("RECRUITEE_COMPANY_ID")
 API_TOKEN = os.getenv("RECRUITEE_API_TOKEN")
