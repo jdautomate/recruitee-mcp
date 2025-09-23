@@ -4,7 +4,12 @@ from urllib import request
 
 import pytest
 
-from recruitee_mcp.http_server import HEALTH_CHECK_PATH, HANDSHAKE_PATHS, create_http_server
+from recruitee_mcp.http_server import (
+    FAVICON_SVG,
+    HEALTH_CHECK_PATH,
+    HANDSHAKE_PATHS,
+    create_http_server,
+)
 from recruitee_mcp.server import RecruiteeMCPServer
 
 
@@ -83,3 +88,14 @@ def test_http_server_handshake(http_server, path):
     assert payload["status"] == "ok"
     assert payload["name"] == "recruitee-mcp"
     assert "message" in payload
+
+
+def test_http_server_favicon(http_server):
+    host, port = http_server.server_address[:2]
+    url = f"http://{host}:{port}/favicon.svg"
+    with request.urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        assert response.headers.get("Content-Type") == "image/svg+xml"
+        body = response.read().decode("utf-8")
+
+    assert body == FAVICON_SVG

@@ -19,6 +19,12 @@ DEFAULT_HTTP_PORT = 8080
 HTTP_PORT_ENV_VAR = "RECRUITEE_HTTP_PORT"
 HEALTH_CHECK_PATH = "/health"
 HANDSHAKE_PATHS = {"/", "/mcp"}
+FAVICON_SVG = (
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" "
+    "fill=\"none\" stroke=\"#0f172a\" stroke-width=\"1.5\">"
+    "<rect x=\"2.5\" y=\"2.5\" width=\"11\" height=\"11\" rx=\"2\" />"
+    "<path d=\"M5 8h6M8 5v6\"/></svg>"
+)
 
 
 def _handshake_payload() -> dict[str, Any]:
@@ -108,6 +114,15 @@ def _create_handler(mcp_server: RecruiteeMCPServer) -> Type[BaseHTTPRequestHandl
                 self._write_json_response({"status": "ok"})
                 return
 
+            if self.path in {"/favicon.svg", "/favicon.ico"}:
+                body = FAVICON_SVG.encode("utf-8")
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+
             normalized_path = self.path.rstrip("/") or "/"
             if normalized_path in HANDSHAKE_PATHS:
                 self._write_json_response(_handshake_payload())
@@ -178,12 +193,14 @@ __all__ = [
     "ThreadingHTTPServer",
     "create_http_server",
     "serve_http",
+    "FAVICON_SVG",
 ]
 
 
 try:  # pragma: no cover - optional dependencies exercised only when installed
     from starlette.applications import Starlette
     from starlette.middleware.cors import CORSMiddleware
+    from starlette.responses import Response
     from starlette.routing import Mount
     from mcp.server.fastmcp import FastMCP
 except ImportError:  # pragma: no cover - optional dependencies may be absent
@@ -193,6 +210,9 @@ except ImportError:  # pragma: no cover - optional dependencies may be absent
     FastMCP = None  # type: ignore[assignment]
 else:
     mcp = FastMCP("recruitee-mcp")  # keep your existing tools/resources/prompts
+
+    async def favicon_endpoint(_request):
+        return Response(FAVICON_SVG, media_type="image/svg+xml")
 
     # If you prefer the endpoint at exactly /mcp, leave as default.
     # If you want it at the root of a subpath, you can do:
@@ -210,6 +230,9 @@ else:
             Mount("/sse", app=mcp.sse_app()),
         ]
     )
+
+    app.router.add_route("/favicon.svg", favicon_endpoint, methods=["GET"])
+    app.router.add_route("/favicon.ico", favicon_endpoint, methods=["GET"])
 
     # CORS: expose the session header for web clients, allow Streamable HTTP methods
     app.add_middleware(
