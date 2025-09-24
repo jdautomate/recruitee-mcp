@@ -71,25 +71,42 @@ class RecruiteeClient:
         limit: int | None = None,
         include_description: bool = False,
         # New / canonical params per API:
-        status: str | None = None,        # "archived" | "active" | "not_archived"
+        status: str | None = None,        # Alias for scope query parameter ("published", ...)
+        scope: str | None = None,         # Direct scope passthrough for callers that need it
         view_mode: str | None = None,    # "brief" | "default"
         offset: int | None = None,
     ) -> Mapping[str, Any]:
         """
         Return a collection of job offers.
 
-        `status` controls which offers are returned ("archived" | "active" | "not_archived").
+        `status` controls which offers are returned (for example "published",
+        "archived", "active" or "not_archived").
         `view_mode="brief"` returns a lean payload; "default" includes most details.
         Use `limit` + `offset` for pagination.
 
-        Notes from API: scope + view_mode are the standard query params. :contentReference[oaicite:1]{index=1}
+        Notes from API: the documented filter is `scope=<status>` even though
+        many payloads refer to the property as ``status``. ``status`` is kept
+        as a convenience alias so existing integrations can continue to call
+        :meth:`list_offers(status="published")` while we translate it to the
+        working `scope` query parameter. Some installations still return
+        archived results for that query, so when ``status`` is provided we also
+        filter the payload client-side to match the requested status.
+        :contentReference[oaicite:1]{index=1}
         """
         params: Dict[str, Any] = {}
 
-        # Canonical scope parameter, supporting both new (`status`) and legacy (`state`) names.
-        scope = status or state
+        # Determine which scope value to forward to the API. Preference order:
+        # explicit scope -> status alias -> legacy state.
+        scope_value: str | None = None
         if scope:
-            params["scope"] = scope
+            scope_value = scope
+        elif status:
+            scope_value = status
+        elif state:
+            scope_value = state
+
+        if scope_value:
+            params["scope"] = scope_value
 
         if limit is not None:
             params["limit"] = limit
@@ -102,7 +119,20 @@ class RecruiteeClient:
         if offset is not None:
             params["offset"] = offset
 
-        return self._request("GET", "offers", params=params)
+        response = self._request("GET", "offers", params=params)
+
+        if status and isinstance(response, Mapping):
+            offers = response.get("offers")
+            if isinstance(offers, list):
+                filtered_offers = [
+                    offer
+                    for offer in offers
+                    if isinstance(offer, Mapping) and offer.get("status") == status
+                ]
+                response = dict(response)
+                response["offers"] = filtered_offers
+
+        return response
 
     def list_jobs(
         self,
