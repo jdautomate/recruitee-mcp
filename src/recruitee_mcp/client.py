@@ -71,7 +71,7 @@ class RecruiteeClient:
         limit: int | None = None,
         include_description: bool = False,
         # New / canonical params per API:
-        status: str | None = None,        # Alias for scope query parameter ("published", ...)
+        status: str | None = "published",        # Alias for scope query parameter ("published", ...)
         scope: str | None = None,         # Direct scope passthrough for callers that need it
         view_mode: str | None = None,    # "brief" | "default"
         offset: int | None = None,
@@ -125,14 +125,9 @@ class RecruiteeClient:
             offers = response.get("offers")
             if isinstance(offers, list):
                 filtered_offers = []
-                #     offer
-                #     for offer in offers
-                #     if isinstance(offer, Mapping) and offer.get("status") == status
-                # ]
                 for offer in offers:
-                    if isinstance(offer, Mapping) and offer.get("status") == "active":
+                    if offer.get("status") == status:
                         filtered_offers.append(offer)
-                        print(offer)
                 response = dict(response)
                 response["offers"] = filtered_offers
 
