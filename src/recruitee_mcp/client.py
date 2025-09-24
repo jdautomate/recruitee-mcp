@@ -124,11 +124,15 @@ class RecruiteeClient:
         if status and isinstance(response, Mapping):
             offers = response.get("offers")
             if isinstance(offers, list):
-                filtered_offers = [
-                    offer
-                    for offer in offers
-                    if isinstance(offer, Mapping) and offer.get("status") == status
-                ]
+                filtered_offers = []
+                #     offer
+                #     for offer in offers
+                #     if isinstance(offer, Mapping) and offer.get("status") == status
+                # ]
+                for offer in offers:
+                    if isinstance(offer, Mapping) and offer.get("status") == "active":
+                        filtered_offers.append(offer)
+                        print(offer)
                 response = dict(response)
                 response["offers"] = filtered_offers
 
