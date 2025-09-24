@@ -71,7 +71,7 @@ class RecruiteeClient:
         limit: int | None = None,
         include_description: bool = False,
         # New / canonical params per API:
-        status: str | None = "active",        # Alias for scope query parameter ("published", ...)
+        status: str | None = None,        # Alias for scope query parameter ("published", ...)
         scope: str | None = None,         # Direct scope passthrough for callers that need it
         view_mode: str | None = None,    # "brief" | "default"
         offset: int | None = None,
