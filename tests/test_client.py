@@ -43,12 +43,27 @@ def test_list_offers_builds_correct_request() -> None:
         assert request.get_method() == "GET"
         assert request.get_header("Authorization") == "Bearer token-123"
         assert timeout == 30.0
-        return DummyResponse({"offers": []})
+        return DummyResponse(
+            {
+                "meta": {"total_count": 3},
+                "offers": [
+                    {"id": 1, "status": "published"},
+                    {"id": 2, "status": "archived"},
+                    {"id": 3, "status": "published"},
+                ],
+            }
+        )
 
     with patch("recruitee_mcp.client.urlopen", side_effect=fake_urlopen):
         response = client.list_offers(status="published", limit=5)
 
-    assert response == {"offers": []}
+    assert response == {
+        "meta": {"total_count": 3},
+        "offers": [
+            {"id": 1, "status": "published"},
+            {"id": 3, "status": "published"},
+        ],
+    }
 
 
 def test_list_jobs_delegates_to_list_offers() -> None:

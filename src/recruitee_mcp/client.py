@@ -88,7 +88,9 @@ class RecruiteeClient:
         many payloads refer to the property as ``status``. ``status`` is kept
         as a convenience alias so existing integrations can continue to call
         :meth:`list_offers(status="published")` while we translate it to the
-        working `scope` query parameter.
+        working `scope` query parameter. Some installations still return
+        archived results for that query, so when ``status`` is provided we also
+        filter the payload client-side to match the requested status.
         :contentReference[oaicite:1]{index=1}
         """
         params: Dict[str, Any] = {}
@@ -117,7 +119,20 @@ class RecruiteeClient:
         if offset is not None:
             params["offset"] = offset
 
-        return self._request("GET", "offers", params=params)
+        response = self._request("GET", "offers", params=params)
+
+        if status and isinstance(response, Mapping):
+            offers = response.get("offers")
+            if isinstance(offers, list):
+                filtered_offers = [
+                    offer
+                    for offer in offers
+                    if isinstance(offer, Mapping) and offer.get("status") == status
+                ]
+                response = dict(response)
+                response["offers"] = filtered_offers
+
+        return response
 
     def list_jobs(
         self,
