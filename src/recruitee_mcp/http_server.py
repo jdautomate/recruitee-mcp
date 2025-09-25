@@ -18,7 +18,8 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_HTTP_PORT = 8080
 HTTP_PORT_ENV_VAR = "RECRUITEE_HTTP_PORT"
 HEALTH_CHECK_PATH = "/health"
-HANDSHAKE_PATHS = {"/", "/mcp"}
+HANDSHAKE_PATHS = {"/", "/mcp", "/openai-mcp"}
+MCPO_MANIFEST_PATH = "/.well-known/mcp.json"
 FAVICON_SVG = (
     "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" "
     "fill=\"none\" stroke=\"#0f172a\" stroke-width=\"1.5\">"
@@ -27,19 +28,34 @@ FAVICON_SVG = (
 )
 
 
-def _handshake_payload() -> dict[str, Any]:
+def _handshake_payload(mcp_server: RecruiteeMCPServer) -> dict[str, Any]:
     """Return a descriptive payload for HTTP GET probes."""
 
+    protocol_description = mcp_server.describe_protocol()
     payload: dict[str, Any] = {
         "status": "ok",
         "name": "recruitee-mcp",
         "message": "Send POST requests with JSON-RPC 2.0 payloads to interact with the Recruitee MCP server.",
+        "protocol": protocol_description["protocol"],
+        "protocol_version": protocol_description["protocol_version"],
+        "capabilities": protocol_description["capabilities"],
+        "endpoints": {
+            "jsonrpc": {"path": "/"},
+        },
     }
 
     try:
         payload["version"] = metadata.version("recruitee-mcp")
     except metadata.PackageNotFoundError:  # pragma: no cover - metadata missing when running from source tree
-        pass
+        payload["version"] = None
+
+    if FastMCP is not None:  # pragma: no branch - conditional metadata only
+        payload["endpoints"].update(
+            {
+                "streamable_http": {"path": "/mcp"},
+                "sse": {"path": "/sse"},
+            }
+        )
 
     return payload
 
@@ -125,7 +141,11 @@ def _create_handler(mcp_server: RecruiteeMCPServer) -> Type[BaseHTTPRequestHandl
 
             normalized_path = self.path.rstrip("/") or "/"
             if normalized_path in HANDSHAKE_PATHS:
-                self._write_json_response(_handshake_payload())
+                self._write_json_response(_handshake_payload(mcp_server))
+                return
+
+            if normalized_path == MCPO_MANIFEST_PATH.rstrip("/"):
+                self._write_json_response(_handshake_payload(mcp_server))
                 return
 
             self.send_error(HTTPStatus.NOT_FOUND, "Unknown endpoint")
@@ -194,6 +214,7 @@ __all__ = [
     "create_http_server",
     "serve_http",
     "FAVICON_SVG",
+    "MCPO_MANIFEST_PATH",
 ]
 
 
