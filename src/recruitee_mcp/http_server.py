@@ -10,6 +10,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 from typing import Any, Optional, Type
+from urllib.parse import urlsplit
 
 from .server import JSONRPCError, RecruiteeMCPServer
 
@@ -126,11 +127,13 @@ def _create_handler(mcp_server: RecruiteeMCPServer) -> Type[BaseHTTPRequestHandl
             self._write_json_response(response_payload)
 
         def do_GET(self) -> None:  # noqa: N802 - required signature
-            if self.path == HEALTH_CHECK_PATH:
+            parsed_path = urlsplit(self.path).path
+
+            if parsed_path == HEALTH_CHECK_PATH:
                 self._write_json_response({"status": "ok"})
                 return
 
-            if self.path in {"/favicon.svg", "/favicon.ico"}:
+            if parsed_path in {"/favicon.svg", "/favicon.ico"}:
                 body = FAVICON_SVG.encode("utf-8")
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", "image/svg+xml")
@@ -139,7 +142,7 @@ def _create_handler(mcp_server: RecruiteeMCPServer) -> Type[BaseHTTPRequestHandl
                 self.wfile.write(body)
                 return
 
-            normalized_path = self.path.rstrip("/") or "/"
+            normalized_path = parsed_path.rstrip("/") or "/"
             if normalized_path in HANDSHAKE_PATHS:
                 self._write_json_response(_handshake_payload(mcp_server))
                 return

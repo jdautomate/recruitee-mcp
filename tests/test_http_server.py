@@ -116,6 +116,18 @@ def test_http_server_mcpo_manifest(http_server):
     _assert_handshake_payload(payload)
 
 
+def test_http_server_mcpo_manifest_with_query_string(http_server):
+    host, port = http_server.server_address[:2]
+    url = f"http://{host}:{port}{MCPO_MANIFEST_PATH}?ts=123"
+    with request.urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        assert response.headers.get("Content-Type") == "application/json"
+        body = response.read().decode("utf-8")
+
+    payload = json.loads(body)
+    _assert_handshake_payload(payload)
+
+
 def test_http_server_favicon(http_server):
     host, port = http_server.server_address[:2]
     url = f"http://{host}:{port}/favicon.svg"
