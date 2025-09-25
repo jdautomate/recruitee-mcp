@@ -63,6 +63,10 @@ To explicitly select the port via CLI instead of the environment variable:
 recruitee-mcp --port 9090
 ```
 
+The HTTP transport now advertises a [Model Context Protocol over HTTP (MCPO)](https://github.com/modelcontextprotocol)
+manifest at `/.well-known/mcp.json`. Clients that support MCPO discovery (including Open WebUI) can use the
+manifest to discover the JSON-RPC endpoint and available tools.
+
 ### Legacy stdio transport
 
 For backwards compatibility a stdio transport is still available. It can be enabled with the `--stdio` flag which causes

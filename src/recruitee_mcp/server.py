@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Mapping
+from typing import Any, Callable, Dict, Mapping, Sequence
 
 from .client import (
     RecruiteeAPIError,
@@ -148,6 +148,34 @@ class RecruiteeMCPServer:
                 },
             ),
         }
+
+    # ------------------------------------------------------------------
+    # Capability / metadata helpers
+    # ------------------------------------------------------------------
+    def describe_protocol(self) -> Dict[str, Any]:
+        """Return a descriptive payload about the server's MCP support."""
+
+        return {
+            "protocol": "model-context-protocol",
+            "protocol_version": MCP_PROTOCOL_VERSION,
+            "capabilities": {
+                "tools": self._tool_summaries(),
+                "resources": [],
+                "prompts": [],
+            },
+        }
+
+    def _tool_summaries(self) -> Sequence[Dict[str, Any]]:
+        summaries = []
+        for tool in sorted(self._tools.values(), key=lambda item: item.name):
+            summaries.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "schema": tool.schema,
+                }
+            )
+        return summaries
 
     # ------------------------------------------------------------------
     # JSON-RPC entry points

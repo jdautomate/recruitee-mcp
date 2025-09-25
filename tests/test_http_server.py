@@ -8,8 +8,10 @@ from recruitee_mcp.http_server import (
     FAVICON_SVG,
     HEALTH_CHECK_PATH,
     HANDSHAKE_PATHS,
+    MCPO_MANIFEST_PATH,
     create_http_server,
 )
+from recruitee_mcp.server import MCP_PROTOCOL_VERSION
 from recruitee_mcp.server import RecruiteeMCPServer
 
 
@@ -85,9 +87,45 @@ def test_http_server_handshake(http_server, path):
         body = response.read().decode("utf-8")
 
     payload = json.loads(body)
+    _assert_handshake_payload(payload)
+
+
+def _assert_handshake_payload(payload: dict) -> None:
     assert payload["status"] == "ok"
     assert payload["name"] == "recruitee-mcp"
+    assert payload["protocol"] == "model-context-protocol"
+    assert payload["protocol_version"] == MCP_PROTOCOL_VERSION
     assert "message" in payload
+    assert payload["capabilities"]["resources"] == []
+    assert payload["capabilities"]["prompts"] == []
+    tools = payload["capabilities"]["tools"]
+    assert isinstance(tools, list) and tools
+    assert payload["endpoints"]["jsonrpc"] == {"path": "/"}
+    assert "version" in payload
+
+
+def test_http_server_mcpo_manifest(http_server):
+    host, port = http_server.server_address[:2]
+    url = f"http://{host}:{port}{MCPO_MANIFEST_PATH}"
+    with request.urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        assert response.headers.get("Content-Type") == "application/json"
+        body = response.read().decode("utf-8")
+
+    payload = json.loads(body)
+    _assert_handshake_payload(payload)
+
+
+def test_http_server_mcpo_manifest_with_query_string(http_server):
+    host, port = http_server.server_address[:2]
+    url = f"http://{host}:{port}{MCPO_MANIFEST_PATH}?ts=123"
+    with request.urlopen(url, timeout=2) as response:
+        assert response.status == 200
+        assert response.headers.get("Content-Type") == "application/json"
+        body = response.read().decode("utf-8")
+
+    payload = json.loads(body)
+    _assert_handshake_payload(payload)
 
 
 def test_http_server_favicon(http_server):
